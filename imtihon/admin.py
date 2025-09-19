@@ -1,3 +1,5 @@
 from django.contrib import admin
+from imtihon.models import *
 
-# Register your models here.
+admin.site.register(Teacher)
+admin.site.register(User)
