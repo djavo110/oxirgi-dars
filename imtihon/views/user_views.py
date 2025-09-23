@@ -7,6 +7,9 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from drf_yasg.utils import swagger_auto_schema
+from django.core.mail import send_mail
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.core.cache import cache
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -20,46 +23,42 @@ class UserViewSet(viewsets.ModelViewSet):
             return [AllowAny()]
         return [IsAuthenticated()]               # create, update, delete uchun faqat login bo‘lganlar
 
-class StaffRegister(APIView):
-    @swagger_auto_schema(request_body=UserSerializer)
-    def post(self, request):
-        serializer = UserSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
 
-        email = data['email']
-        try:
-            otp_obj = EmailOTP.objects.get(email=email)
-        except EmailOTP.DoesNotExist:
-            return Response({"error": "Bu email uchun OTP yuborilmagan"}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not otp_obj.is_verified:
-            return Response({"error": "Email OTP orqali tasdiqlanmagan"}, status=status.HTTP_400_BAD_REQUEST)
-
-        User.objects.create_user(
-            email=email,
-            password=data['password']
-        )
-
-        otp_obj.delete()
-
-        return Response(data=serializer.data, status=status.HTTP_201_CREATED)
-
+def get_tokens_for_user(user):
+    refresh = RefreshToken.for_user(user)
+    return {
+        'refresh': str(refresh),
+        'access': str(refresh.access_token),
+    }
 class Login(APIView):
     @swagger_auto_schema(request_body=LoginSerializer)
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        # Email orqali foydalanuvchini topamiz
-        user = get_object_or_404(User, email=serializer.validated_data.get("email"))
-        print(user)
+        email = serializer.validated_data.get("email")
+        password = serializer.validated_data.get("password")
+
+        # foydalanuvchini email + parol bilan tekshirish
+        user = authenticate(request, email=email, password=password)
+
+        if user is None:
+            return Response(
+                {"error": "Email yoki parol xato!"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        if not user.is_active:
+            return Response(
+                {"error": "Your account is disabled!"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         token = get_tokens_for_user(user)
-        return Response(data=token, status=status.HTTP_200_OK)
+        return Response(token, status=status.HTTP_200_OK)
 
 class SendOTPView(APIView):
-    @swagger_auto_schema(request_body=SentEmailSerializer)  # serializer emailni oladi
+    @swagger_auto_schema(request_body=SentEmailSerializer)
     def post(self, request):
         serializer = SentEmailSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -68,27 +67,40 @@ class SendOTPView(APIView):
         if not email:
             return Response({"error": "Email kiritilishi kerak"}, status=400)
 
-        # OTP modelidan foydalangan holda
-        otp_obj, created = EmailOTP.objects.get_or_create(email=email)
-        code = otp_obj.generate_otp()
+        # OTP generatsiya qilish (cache orqali)
+        import random
+        from django.core.cache import cache
+        from django.conf import settings
+        from django.core.mail import send_mail
 
-        # Hozircha terminalga chiqaramiz (keyin email orqali yuborasiz)
-        print(f"OTP kod: {code}")
+        otp = random.randint(100000, 999999)  # 6 xonali kod
+        cache.set(f"otp_{email}", otp, timeout=300)  # 5 minut
 
-        return Response({"message": "OTP yuborildi"}, status=200)
+        subject = "Sizning OTP kodingiz"
+        message = f"Sizning tasdiqlash kodingiz: {otp}. Bu kod 5 daqiqa davomida amal qiladi."
+        from_email = settings.DEFAULT_FROM_EMAIL
+        recipient_list = [email]
 
-class VerifyOTPView(APIView):
-    @swagger_auto_schema(request_body=VerifyOTPSerializer)  # bunda email + otp bo‘ladi
+        send_mail(subject, message, from_email, recipient_list)
+
+        return Response({"message": "OTP email orqali yuborildi"}, status=200)
+
+
+class VerifyOTP(APIView):
     def post(self, request):
-        serializer = VerifyOTPSerializer(data=request.data)
-        if serializer.is_valid():
-            otp_obj = serializer.validated_data["otp_obj"]
-            email = serializer.validated_data["email"]
+        email = request.data.get("email")
+        otp = request.data.get("otp")
 
-            # OTP tasdiqlash
-            otp_obj.is_verified = True
-            otp_obj.save()
+        cached_otp = cache.get(f"otp_{email}")
+        if cached_otp and str(cached_otp) == str(otp):
+            # Foydalanuvchini topamiz
+            user = get_object_or_404(User, email=email)
+            user.is_verified = True  # modelga is_verified qo‘shib qo‘y
+            user.save()
 
-            return Response({"message": "OTP tasdiqlandi"}, status=200)
-        else:
-            return Response({"error": "Xato kod kiritildi yoki muddati tugagan"}, status=400)
+            # Cachenidagisini o‘chirib tashlaymiz
+            cache.delete(f"otp_{email}")
+
+            return Response({"success": True, "message": "Email verified successfully!"}, status=status.HTTP_200_OK)
+
+        return Response({"success": False, "message": "Invalid or expired OTP"}, status=status.HTTP_400_BAD_REQUEST)

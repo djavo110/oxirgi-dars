@@ -24,7 +24,7 @@ class TeacherPostSerializer(serializers.Serializer):
 class TeacherSerializer(serializers.ModelSerializer):
     user=AddUserSerializer()
     departments=serializers.PrimaryKeyRelatedField(queryset=Departments.objects.all(), many=True)
-    course=serializers.PrimaryKeyRelatedField(queryset=Course.objects.all(), many=True)
+    course=serializers.PrimaryKeyRelatedField(queryset=Course.objects.all())
 
     class Meta:
         model=Teacher
@@ -41,7 +41,8 @@ class TeacherSerializer(serializers.ModelSerializer):
 
         teacher=Teacher.objects.create(user=user, **validated_data)
         teacher.departments.set(departments_db)
-        teacher.course.set(course_db)
+        teacher.course = course_db
+        teacher.save()
         return teacher
 
 class CourseSerializer(serializers.ModelSerializer):

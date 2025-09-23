@@ -7,7 +7,7 @@ from imtihon.models import EmailOTP   # email otp modeli
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id", "phone_number", "email", "is_student", "is_teacher", "is_active"]
+        fields = ["id", "phone_number", "email", "password",  "is_student", "is_teacher", "is_active"]
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()

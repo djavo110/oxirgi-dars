@@ -25,8 +25,8 @@ class TableType(models.Model):
         return self.title
 
 class Table(models.Model):
-    start_time = models.TimeField()
-    end_time = models.TimeField()
+    start_time = models.DateField()
+    end_time = models.DateField()
     room = models.ForeignKey(Rooms, on_delete=models.RESTRICT)
     type = models.ForeignKey(TableType, on_delete=models.RESTRICT)
     descriptions = models.CharField(max_length=100, null=True, blank=True)
@@ -41,8 +41,8 @@ class GroupStudent(models.Model):
     table = models.ForeignKey(Table, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    start_time = models.TimeField()
-    end_time = models.TimeField()
+    start_time = models.DateField()
+    end_time = models.DateField()
     descriptions = models.CharField(max_length=100, null=True, blank=True)
 
     def __str__(self):

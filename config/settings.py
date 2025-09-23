@@ -179,6 +179,7 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = "mirzayevjavohir110@gmail.com"   # o'z emailingiz
 EMAIL_HOST_PASSWORD = "hvif knwa zlcr xtvz"
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/

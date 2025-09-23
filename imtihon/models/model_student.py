@@ -11,6 +11,7 @@ class Student(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     group = models.ManyToManyField('GroupStudent', related_name='get_group')
+    course = models.ManyToManyField(Course, related_name="students")
     descriptions = models.CharField(max_length=100, null=True, blank=True)
 
     def __str__(self):
